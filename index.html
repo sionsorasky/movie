@@ -2,68 +2,186 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>動画再生アプリ</title>
+  <title>sion movie player</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f4f6f9;
+      color: #333;
+      transition: background-color 0.3s, color 0.3s;
     }
+
+    .dark-mode {
+      background-color: #1e1e1e;
+      color: #f4f4f4;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+
+    .dark-mode .container {
+      background: #2c2c2c;
+    }
+
     video {
-      max-width: 100%;
-      margin-bottom: 10px;
+      width: 100%;
+      border-radius: 10px;
+      background: black;
+      margin-bottom: 20px;
     }
+
+    input, select, button {
+      margin: 5px;
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+
     .controls {
-      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
     }
-    label, input {
-      margin-right: 10px;
+
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #2980b9;
+    }
+
+    .playlist {
+      margin-top: 15px;
+    }
+
+    .playlist-item {
+      cursor: pointer;
+      padding: 5px 10px;
+      border-radius: 5px;
+      margin-bottom: 5px;
+      background: #eee;
+    }
+
+    .playlist-item:hover {
+      background: #ddd;
+    }
+
+    .dark-mode .playlist-item {
+      background: #444;
+    }
+
+    .dark-mode .playlist-item:hover {
+      background: #555;
+    }
+
+    .dark-mode button {
+      background-color: #555;
     }
   </style>
 </head>
 <body>
 
-  <h1>動画再生アプリ</h1>
+  <div class="container">
+    <h1>🎬 高機能モダン動画プレイヤー</h1>
 
-  <input type="file" id="videoUpload" accept="video/*">
-  <br><br>
+    <div class="controls">
+      <input type="file" id="videoUpload" accept="video/*" multiple>
+      <button onclick="toggleDarkMode()">🌙 ダークモード切替</button>
+    </div>
 
-  <video id="video" controls></video>
+    <video id="video" controls></video>
 
-  <div class="controls">
-    <label for="speed">再生速度：</label>
-    <input type="number" id="speed" value="1.0" step="0.1" min="0.1" max="5.0">
-    <button onclick="setPlaybackSpeed()">変更</button>
-  </div>
+    <div class="controls">
+      <label>再生速度:</label>
+      <input type="number" id="speed" value="1.0" step="0.1" min="0.1" max="5.0">
+      <button onclick="setPlaybackSpeed()">変更</button>
+    </div>
 
-  <div class="controls">
-    <label for="pointA">A点（秒）：</label>
-    <input type="number" id="pointA" step="0.1" min="0">
-    <label for="pointB">B点（秒）：</label>
-    <input type="number" id="pointB" step="0.1" min="0">
-    <button onclick="setABRepeat()">A-Bリピート開始</button>
-    <button onclick="clearABRepeat()">停止</button>
+    <div class="controls">
+      <label>A点:</label>
+      <span id="aTimeDisplay">未設定</span>
+      <label>B点:</label>
+      <span id="bTimeDisplay">未設定</span>
+      <label>ループ回数:</label>
+      <input type="number" id="loopCount" value="0" min="0">
+      <button onclick="setABRepeat()">A-Bリピート開始</button>
+      <button onclick="clearABRepeat()">停止</button>
+    </div>
+
+    <div class="controls">
+      <button onclick="setPoint('A')">A点を設定</button>
+      <button onclick="setPoint('B')">B点を設定</button>
+    </div>
+
+    <div class="playlist">
+      <h3>📂 プレイリスト</h3>
+      <div id="playlistContainer"></div>
+    </div>
   </div>
 
   <script>
     const video = document.getElementById('video');
     const videoUpload = document.getElementById('videoUpload');
     const speedInput = document.getElementById('speed');
-    const pointAInput = document.getElementById('pointA');
-    const pointBInput = document.getElementById('pointB');
+    const aTimeDisplay = document.getElementById('aTimeDisplay');
+    const bTimeDisplay = document.getElementById('bTimeDisplay');
+    const loopCountInput = document.getElementById('loopCount');
+    const playlistContainer = document.getElementById('playlistContainer');
 
-    let abRepeatInterval = null;
+    let videoFiles = [];
     let pointA = null;
     let pointB = null;
+    let abRepeatInterval = null;
+    let loopCounter = 0;
+    let maxLoops = 0;
+
+    function toggleDarkMode() {
+      document.body.classList.toggle('dark-mode');
+    }
 
     videoUpload.addEventListener('change', function () {
-      const file = this.files[0];
+      videoFiles = Array.from(this.files);
+      updatePlaylist();
+      if (videoFiles.length > 0) {
+        loadVideo(0);
+      }
+    });
+
+    function updatePlaylist() {
+      playlistContainer.innerHTML = '';
+      videoFiles.forEach((file, index) => {
+        const div = document.createElement('div');
+        div.className = 'playlist-item';
+        div.textContent = file.name;
+        div.onclick = () => loadVideo(index);
+        playlistContainer.appendChild(div);
+      });
+    }
+
+    function loadVideo(index) {
+      const file = videoFiles[index];
       if (file) {
+        clearABRepeat();
         const url = URL.createObjectURL(file);
         video.src = url;
         video.load();
-        clearABRepeat();
       }
-    });
+    }
 
     function setPlaybackSpeed() {
       const speed = parseFloat(speedInput.value);
@@ -74,24 +192,40 @@
       }
     }
 
-    function setABRepeat() {
-      pointA = parseFloat(pointAInput.value);
-      pointB = parseFloat(pointBInput.value);
+    function setPoint(point) {
+      const time = video.currentTime;
+      if (point === 'A') {
+        pointA = time;
+        aTimeDisplay.textContent = time.toFixed(1) + " 秒";
+      } else {
+        pointB = time;
+        bTimeDisplay.textContent = time.toFixed(1) + " 秒";
+      }
+    }
 
-      if (isNaN(pointA) || isNaN(pointB) || pointA >= pointB) {
-        alert("有効なA-B間を設定してください。");
+    function setABRepeat() {
+      if (pointA === null || pointB === null || pointA >= pointB) {
+        alert("正しいA-B間を設定してください。");
         return;
       }
 
-      clearABRepeat(); // 重複防止
+      clearABRepeat();
+
+      maxLoops = parseInt(loopCountInput.value, 10) || 0;
+      loopCounter = 0;
       video.currentTime = pointA;
       video.play();
 
       abRepeatInterval = setInterval(() => {
         if (video.currentTime >= pointB) {
+          loopCounter++;
+          if (maxLoops > 0 && loopCounter >= maxLoops) {
+            clearABRepeat();
+            return;
+          }
           video.currentTime = pointA;
         }
-      }, 200);
+      }, 100);
     }
 
     function clearABRepeat() {
@@ -101,6 +235,5 @@
       }
     }
   </script>
-
 </body>
 </html>
