@@ -92,6 +92,28 @@
     .dark-mode button {
       background-color: #555;
     }
+
+    .description {
+      margin-top: 60px;
+      padding: 30px;
+      border-top: 1px solid #ccc;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .dark-mode .description {
+      border-top: 1px solid #666;
+    }
+
+    .description h2 {
+      font-size: 20px;
+      margin-bottom: 10px;
+    }
+
+    .description ul {
+      margin-left: 20px;
+      padding-left: 10px;
+    }
   </style>
 </head>
 <body>
@@ -132,6 +154,29 @@
       <h3>📂 プレイリスト</h3>
       <div id="playlistContainer"></div>
     </div>
+  </div>
+
+  <!-- アプリ紹介セクション -->
+  <div class="description">
+    <h2>🔧 Sion Movie Player 機能紹介</h2>
+    <ul>
+      <li><strong>動画アップロードとプレイリスト：</strong> 複数の動画ファイルを選択・一覧から選んで再生</li>
+      <li><strong>再生速度変更：</strong> 0.1倍〜5倍まで、自由に調整可能</li>
+      <li><strong>A-Bリピート再生：</strong> 指定区間をループ再生、回数指定付き</li>
+      <li><strong>ダークモード切替：</strong> ボタン1つで夜間視聴に最適な配色へ</li>
+    </ul>
+
+    <h3>🧪 今後のアップデート予定</h3>
+    <ul>
+      <li>🎯 シークバー上で A/B 点を直感的に設定可能なマーカー追加</li>
+      <li>🔔 A-Bリピート終了時の通知表示（例：ポップアップや音）</li>
+      <li>🖼️ 現在位置のスナップショット・動画サムネイル表示</li>
+      <li>📁 動画拡張子の変換（例：.mp4 から .webm へ）</li>
+    </ul>
+
+    <p style="margin-top: 20px; font-size: 0.95em; color: gray;">
+      本アプリは完全ローカルで動作し、データは一切アップロードされません。安心してお使いください。
+    </p>
   </div>
 
   <script>
@@ -221,6 +266,7 @@
           loopCounter++;
           if (maxLoops > 0 && loopCounter >= maxLoops) {
             clearABRepeat();
+            alert("A-Bリピート終了！");
             return;
           }
           video.currentTime = pointA;
