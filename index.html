@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Sion Movie Player</title>
   <style>
     body {
@@ -120,6 +120,9 @@
       box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     }
   </style>
+
+  <!-- JSZip CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -127,10 +130,17 @@
     <h1>Sion Movie Player</h1>
 
     <div class="controls">
-      <input type="file" id="videoUpload" accept="video/*" multiple>
-      <input type="text" id="youtubeUrl" placeholder="YouTubeのURLを入力">
+      <input type="file" id="videoUpload" accept="video/*" multiple />
+      <input type="text" id="youtubeUrl" placeholder="YouTubeのURLを入力" />
       <button onclick="addYouTubeToPlaylist()">→ プレイリストに追加</button>
       <button onclick="toggleDarkMode()">ダークモード切替</button>
+    </div>
+
+    <!-- 新規追加：エクスポート＆インポートボタン -->
+    <div class="controls">
+      <button onclick="exportPlaylist()">📥 プレイリスト＆動画をZIPで保存</button>
+      <input type="file" id="importZip" accept=".zip" style="display:none" onchange="importPlaylist(event)" />
+      <button onclick="document.getElementById('importZip').click()">📤 ZIPファイルからプレイリスト読み込み</button>
     </div>
 
     <video id="video" controls></video>
@@ -138,7 +148,7 @@
 
     <div class="controls">
       <label>再生速度:</label>
-      <input type="number" id="speed" value="1.0" step="0.1" min="0.1" max="5.0">
+      <input type="number" id="speed" value="1.0" step="0.1" min="0.1" max="5.0" />
       <button onclick="setPlaybackSpeed()">変更</button>
     </div>
 
@@ -146,7 +156,7 @@
       <label>A点:</label><span id="aTimeDisplay">未設定</span>
       <label>B点:</label><span id="bTimeDisplay">未設定</span>
       <label>ループ回数:</label>
-      <input type="number" id="loopCount" value="0" min="0">
+      <input type="number" id="loopCount" value="0" min="0" />
       <button onclick="setABRepeat()">A-Bリピート開始</button>
       <button onclick="clearABRepeat()">停止</button>
     </div>
@@ -175,6 +185,7 @@
       <li><strong>A-Bリピート再生：</strong> 区間とループ回数を指定し、YouTubeにも対応</li>
       <li><strong>ダークモード切替：</strong> ボタンひとつで夜間モード</li>
       <li><strong>再生位置の画像キャプチャ：</strong> 現在位置のスナップショットを表示・保存</li>
+      <li><strong>プレイリスト＆動画ファイルのZIP保存と読み込み</strong></li>
     </ul>
 
     <h3>🧪 今後のアップデート予定</h3>
@@ -242,14 +253,7 @@
 
       if (youtubePlayer.style.display === 'block') {
         alert("YouTubeのA-Bリピートは簡易対応中です。動画を頭出ししてループ再生します。");
-        const seekA = Math.floor(pointA);
-        const seekB = Math.floor(pointB);
-        abRepeatInterval = setInterval(() => {
-          youtubePlayer.contentWindow.postMessage(JSON.stringify({
-            event: "command", func: "getCurrentTime", args: []
-          }), "*");
-        }, 1000);
-        // 実装詳細は YouTube Iframe API を利用する必要あり
+        // YouTube API対応は今後実装予定
       } else {
         video.currentTime = pointA;
         video.play();
@@ -306,7 +310,7 @@
         if (item.type === 'local') {
           div.textContent = item.file.name;
         } else {
-          div.innerHTML = `<img src="${item.thumb}"><span>YT: ${item.id}</span>`;
+          div.innerHTML = `<img src="${item.thumb}" alt="thumbnail"><span>YT: ${item.id}</span>`;
         }
         div.onclick = () => loadVideo(i);
         playlistContainer.appendChild(div);
@@ -339,6 +343,91 @@
       const img = document.createElement('img');
       img.src = canvas.toDataURL('image/png');
       document.getElementById('snapshotContainer').appendChild(img);
+    }
+
+    // --- ZIP保存機能 ---
+    async function exportPlaylist() {
+      if (videoFiles.length === 0) {
+        alert("プレイリストに動画がありません。");
+        return;
+      }
+
+      const zip = new JSZip();
+
+      // play.txt にプレイリスト情報を保存（localファイル名とYouTubeID）
+      const playlistData = videoFiles.map(item => {
+        if (item.type === 'local') {
+          return { type: 'local', name: item.file.name };
+        } else {
+          return { type: 'youtube', id: item.id };
+        }
+      });
+      zip.file("play.txt", JSON.stringify(playlistData));
+
+      // local動画ファイルをzipに追加
+      for (const item of videoFiles) {
+        if (item.type === 'local') {
+          zip.file(item.file.name, item.file);
+        }
+      }
+
+      try {
+        const content = await zip.generateAsync({ type: "blob" });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(content);
+        a.download = "playlist.zip";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      } catch (e) {
+        alert("ZIPの生成に失敗しました。");
+        console.error(e);
+      }
+    }
+
+    // --- ZIP読み込み機能 ---
+    async function importPlaylist(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const zip = new JSZip();
+      try {
+        const content = await zip.loadAsync(file);
+        const playTxtFile = content.file("play.txt");
+        if (!playTxtFile) {
+          alert("play.txtがZIPに見つかりません。");
+          return;
+        }
+
+        const playlistText = await playTxtFile.async("string");
+        const playlistData = JSON.parse(playlistText);
+
+        const newVideoFiles = [];
+
+        for (const item of playlistData) {
+          if (item.type === 'local') {
+            const fileInZip = content.file(item.name);
+            if (!fileInZip) {
+              alert(`動画ファイル ${item.name} がZIP内に見つかりません。`);
+              continue;
+            }
+            const blob = await fileInZip.async("blob");
+            const fileObj = new File([blob], item.name);
+            newVideoFiles.push({ type: 'local', file: fileObj });
+          } else if (item.type === 'youtube') {
+            newVideoFiles.push({ type: 'youtube', id: item.id, thumb: `https://img.youtube.com/vi/${item.id}/mqdefault.jpg` });
+          }
+        }
+
+        videoFiles = newVideoFiles;
+        updatePlaylist();
+        if (videoFiles.length > 0) loadVideo(0);
+
+      } catch (err) {
+        alert("ZIPの読み込みに失敗しました。");
+        console.error(err);
+      } finally {
+        event.target.value = ""; // 同じファイルを再選択できるようクリア
+      }
     }
   </script>
 </body>
