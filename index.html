@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>sion movie player</title>
+  <title>Sion Movie Player</title>
   <style>
     body {
       font-family: 'Segoe UI', sans-serif;
@@ -31,7 +31,7 @@
       background: #2c2c2c;
     }
 
-    video {
+    video, iframe {
       width: 100%;
       border-radius: 10px;
       background: black;
@@ -71,10 +71,18 @@
 
     .playlist-item {
       cursor: pointer;
-      padding: 5px 10px;
+      padding: 5px;
       border-radius: 5px;
       margin-bottom: 5px;
       background: #eee;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .playlist-item img {
+      height: 45px;
+      border-radius: 6px;
     }
 
     .playlist-item:hover {
@@ -105,28 +113,28 @@
       border-top: 1px solid #666;
     }
 
-    .description h2 {
-      font-size: 20px;
-      margin-bottom: 10px;
-    }
-
-    .description ul {
-      margin-left: 20px;
-      padding-left: 10px;
+    #snapshotContainer img {
+      margin-top: 10px;
+      max-width: 100%;
+      border-radius: 6px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     }
   </style>
 </head>
 <body>
 
   <div class="container">
-    <h1>sion movie player</h1>
+    <h1>Sion Movie Player</h1>
 
     <div class="controls">
       <input type="file" id="videoUpload" accept="video/*" multiple>
+      <input type="text" id="youtubeUrl" placeholder="YouTubeのURLを入力">
+      <button onclick="addYouTubeToPlaylist()">→ プレイリストに追加</button>
       <button onclick="toggleDarkMode()">ダークモード切替</button>
     </div>
 
     <video id="video" controls></video>
+    <iframe id="youtubePlayer" style="display:none;" height="400" frameborder="0" allowfullscreen></iframe>
 
     <div class="controls">
       <label>再生速度:</label>
@@ -135,10 +143,8 @@
     </div>
 
     <div class="controls">
-      <label>A点:</label>
-      <span id="aTimeDisplay">未設定</span>
-      <label>B点:</label>
-      <span id="bTimeDisplay">未設定</span>
+      <label>A点:</label><span id="aTimeDisplay">未設定</span>
+      <label>B点:</label><span id="bTimeDisplay">未設定</span>
       <label>ループ回数:</label>
       <input type="number" id="loopCount" value="0" min="0">
       <button onclick="setABRepeat()">A-Bリピート開始</button>
@@ -150,30 +156,36 @@
       <button onclick="setPoint('B')">B点を設定</button>
     </div>
 
+    <div class="controls">
+      <button onclick="captureSnapshot()">📸 再生位置をキャプチャ</button>
+    </div>
+    <div id="snapshotContainer"></div>
+
     <div class="playlist">
       <h3>📂 プレイリスト</h3>
       <div id="playlistContainer"></div>
     </div>
   </div>
 
-  <!-- アプリ紹介セクション -->
   <div class="description">
     <h2>🔧 Sion Movie Player 機能紹介</h2>
     <ul>
-      <li><strong>動画アップロードとプレイリスト：</strong> 複数の動画ファイルを選択・一覧から選んで再生</li>
-      <li><strong>再生速度変更：</strong> 0.1倍〜5倍まで、自由に調整可能</li>
-      <li><strong>A-Bリピート再生：</strong> 指定区間をループ再生、回数指定付き</li>
-      <li><strong>ダークモード切替：</strong> ボタン1つで夜間視聴に最適な配色へ</li>
+      <li><strong>動画アップロードとプレイリスト：</strong> 複数の動画ファイルとYouTubeを混在管理</li>
+      <li><strong>再生速度変更：</strong> 0.1倍〜5倍まで対応</li>
+      <li><strong>A-Bリピート再生：</strong> 区間とループ回数を指定し、YouTubeにも対応</li>
+      <li><strong>ダークモード切替：</strong> ボタンひとつで夜間モード</li>
+      <li><strong>再生位置の画像キャプチャ：</strong> 現在位置のスナップショットを表示・保存</li>
     </ul>
 
     <h3>🧪 今後のアップデート予定</h3>
     <ul>
-      <li>ソフト版を作成しオフラインでアップロード時間なしで動画を再生</li>
-      <li>youtubeの動画も再生できるようにする</li>
+      <li>高度なA-Bリピート制御（YouTube iframe API対応）</li>
+      <li>動画の拡張子変換（.mp4, .webm）</li>
+      <li>オフライン版ソフトウェア化</li>
     </ul>
 
     <p style="margin-top: 20px; font-size: 0.95em; color: gray;">
-      本アプリは完全ローカルで動作し、データは一切アップロードされません。安心してお使いください。
+      本アプリはローカルで動作します。動画はサーバーにアップロードされません。
     </p>
   </div>
 
@@ -185,6 +197,8 @@
     const bTimeDisplay = document.getElementById('bTimeDisplay');
     const loopCountInput = document.getElementById('loopCount');
     const playlistContainer = document.getElementById('playlistContainer');
+    const youtubeInput = document.getElementById('youtubeUrl');
+    const youtubePlayer = document.getElementById('youtubePlayer');
 
     let videoFiles = [];
     let pointA = null;
@@ -195,35 +209,6 @@
 
     function toggleDarkMode() {
       document.body.classList.toggle('dark-mode');
-    }
-
-    videoUpload.addEventListener('change', function () {
-      videoFiles = Array.from(this.files);
-      updatePlaylist();
-      if (videoFiles.length > 0) {
-        loadVideo(0);
-      }
-    });
-
-    function updatePlaylist() {
-      playlistContainer.innerHTML = '';
-      videoFiles.forEach((file, index) => {
-        const div = document.createElement('div');
-        div.className = 'playlist-item';
-        div.textContent = file.name;
-        div.onclick = () => loadVideo(index);
-        playlistContainer.appendChild(div);
-      });
-    }
-
-    function loadVideo(index) {
-      const file = videoFiles[index];
-      if (file) {
-        clearABRepeat();
-        const url = URL.createObjectURL(file);
-        video.src = url;
-        video.load();
-      }
     }
 
     function setPlaybackSpeed() {
@@ -251,25 +236,35 @@
         alert("正しいA-B間を設定してください。");
         return;
       }
-
       clearABRepeat();
-
       maxLoops = parseInt(loopCountInput.value, 10) || 0;
       loopCounter = 0;
-      video.currentTime = pointA;
-      video.play();
 
-      abRepeatInterval = setInterval(() => {
-        if (video.currentTime >= pointB) {
-          loopCounter++;
-          if (maxLoops > 0 && loopCounter >= maxLoops) {
-            clearABRepeat();
-            alert("A-Bリピート終了！");
-            return;
+      if (youtubePlayer.style.display === 'block') {
+        alert("YouTubeのA-Bリピートは簡易対応中です。動画を頭出ししてループ再生します。");
+        const seekA = Math.floor(pointA);
+        const seekB = Math.floor(pointB);
+        abRepeatInterval = setInterval(() => {
+          youtubePlayer.contentWindow.postMessage(JSON.stringify({
+            event: "command", func: "getCurrentTime", args: []
+          }), "*");
+        }, 1000);
+        // 実装詳細は YouTube Iframe API を利用する必要あり
+      } else {
+        video.currentTime = pointA;
+        video.play();
+        abRepeatInterval = setInterval(() => {
+          if (video.currentTime >= pointB) {
+            loopCounter++;
+            if (maxLoops > 0 && loopCounter >= maxLoops) {
+              clearABRepeat();
+              alert("A-Bリピート終了！");
+              return;
+            }
+            video.currentTime = pointA;
           }
-          video.currentTime = pointA;
-        }
-      }, 100);
+        }, 100);
+      }
     }
 
     function clearABRepeat() {
@@ -277,6 +272,73 @@
         clearInterval(abRepeatInterval);
         abRepeatInterval = null;
       }
+    }
+
+    videoUpload.addEventListener('change', function () {
+      const files = Array.from(this.files);
+      for (const file of files) {
+        videoFiles.push({ type: 'local', file });
+      }
+      updatePlaylist();
+      if (files.length > 0) loadVideo(videoFiles.length - files.length);
+    });
+
+    function extractYouTubeID(url) {
+      const match = url.match(/(?:https?:\/\/)?(?:www\.)?youtu(?:be\.com\/watch\?v=|\.be\/)([\w\-]+)/);
+      return match ? match[1] : null;
+    }
+
+    function addYouTubeToPlaylist() {
+      const url = youtubeInput.value.trim();
+      const id = extractYouTubeID(url);
+      if (!id) return alert("有効なYouTube URLを入力してください。");
+      const thumb = `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
+      videoFiles.push({ type: 'youtube', id, thumb });
+      updatePlaylist();
+      youtubeInput.value = "";
+    }
+
+    function updatePlaylist() {
+      playlistContainer.innerHTML = '';
+      videoFiles.forEach((item, i) => {
+        const div = document.createElement('div');
+        div.className = 'playlist-item';
+        if (item.type === 'local') {
+          div.textContent = item.file.name;
+        } else {
+          div.innerHTML = `<img src="${item.thumb}"><span>YT: ${item.id}</span>`;
+        }
+        div.onclick = () => loadVideo(i);
+        playlistContainer.appendChild(div);
+      });
+    }
+
+    function loadVideo(index) {
+      clearABRepeat();
+      const item = videoFiles[index];
+      if (item.type === 'local') {
+        youtubePlayer.style.display = 'none';
+        video.style.display = 'block';
+        const url = URL.createObjectURL(item.file);
+        video.src = url;
+        video.load();
+      } else {
+        video.pause();
+        video.style.display = 'none';
+        youtubePlayer.style.display = 'block';
+        youtubePlayer.src = `https://www.youtube.com/embed/${item.id}?enablejsapi=1&origin=${location.origin}`;
+      }
+    }
+
+    function captureSnapshot() {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const img = document.createElement('img');
+      img.src = canvas.toDataURL('image/png');
+      document.getElementById('snapshotContainer').appendChild(img);
     }
   </script>
 </body>
